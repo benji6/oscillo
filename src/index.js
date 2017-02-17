@@ -14,6 +14,8 @@ const timeDomain = new Uint8Array(1024)
 const analyser = audioContext.createAnalyser()
 
 const frequencyBins = new Uint8Array(analyser.frequencyBinCount)
+const trails = Array.from({length: analyser.frequencyBinCount}).map(() => ({value: -1}))
+const trailHeight = 3
 
 analyser.fftSize = timeDomain.length
 
@@ -29,11 +31,33 @@ const render = timeStamp => {
   analyser.getByteFrequencyData(frequencyBins)
   const barWidth = width / frequencyBins.length * 2
   for (let i = 0; i < frequencyBins.length; i++) {
-    const frequencyBinRaio = frequencyBins[i] / 255
-    const barHeight = frequencyBinRaio * height
-    canvasContext.fillStyle = `hsla(${frequencyBinRaio * 360 + hue}, 100%, 50%, 0.5)`
-    canvasContext.shadowColor = `hsla(${frequencyBinRaio * 360 + hue}, 100%, 50%, 0.5)`
-    canvasContext.fillRect((barWidth + 1) * i, height - barHeight, barWidth, height)
+    const frequency = frequencyBins[i]
+    const frequencyRatio = frequency / 255
+    const barHeight = frequencyRatio * height - trailHeight
+    const barHue = frequencyRatio * 360 + hue
+    const barColor = `hsla(${barHue}, 100%, 50%, 0.5)`
+    const trailColor = `hsla(${barHue + 180}, 100%, 50%, 0.5)`
+
+    let trail = trails[i]
+    if (trail.value < frequency) {
+      trail = {
+        timeStamp,
+        value: frequency,
+        y: height - frequency / 255 * height - trailHeight,
+      }
+      trails[i] = trail
+    } else if (trail.timeStamp < timeStamp - 300) {
+      trail.value -= 2
+      trail.y = height - trail.value / 255 * height - trailHeight
+    }
+
+    const x = (barWidth + 1) * i
+
+    canvasContext.fillStyle = canvasContext.shadowColor = trailColor
+    canvasContext.fillRect(x, trail.y, barWidth, trailHeight)
+
+    canvasContext.fillStyle = canvasContext.shadowColor = barColor
+    canvasContext.fillRect(x, height - barHeight, barWidth, height)
   }
 
   analyser.getByteTimeDomainData(timeDomain)
